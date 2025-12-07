@@ -1,5 +1,5 @@
 import torch
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 import esm
 
@@ -11,9 +11,12 @@ class ESMEncoder:
     Uses fair-esm API (`esm.pretrained`) and the alphabet batch converter.
     """
 
-    def __init__(self, model_name: str = "esm2_t33_650M_UR50D", device: Optional[torch.device] = None, max_len: int = 1024):
+    def __init__(self, model_name: str = "esm2_t33_650M_UR50D", device: Optional[Union[torch.device, str]] = None, max_len: int = 1024):
         self.model_name = model_name
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if isinstance(device, str):
+            self.device = torch.device(device)
+        else:
+            self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model, self.alphabet = getattr(esm.pretrained, model_name)()
         self.model.eval()
         self.model.to(self.device)

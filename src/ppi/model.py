@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 from .esm_encoder import ESMEncoder
 from .attention import CrossAttentionBlock
@@ -34,11 +34,15 @@ class SECAIModel(nn.Module):
         lora_r: int = 8,
         lora_alpha: int = 16,
         dropout: float = 0.1,
-        device: Optional[torch.device] = None,
+        device: Optional[Union[torch.device, str]] = None,
         max_len: int = 1024,
     ):
         super().__init__()
-        self.encoder = ESMEncoder(model_name=esm_model_name, device=device, max_len=max_len)
+        if isinstance(device, str):
+            dev = torch.device(device)
+        else:
+            dev = device
+        self.encoder = ESMEncoder(model_name=esm_model_name, device=dev, max_len=max_len)
         hidden_dim = self.encoder.hidden_dim or 1280
 
         if freeze_esm:

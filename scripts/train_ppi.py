@@ -21,6 +21,7 @@ def parse_args():
     p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--threshold", type=float, default=0.5)
     p.add_argument("--precision", choices=["auto", "fp32", "bf16"], default="auto")
+    p.add_argument("--device", default="auto")
     return p.parse_args()
 
 
@@ -45,11 +46,14 @@ def metrics_from_logits(logits: torch.Tensor, labels: torch.Tensor, threshold: f
 
 def train():
     args = parse_args()
-    device = (
-        torch.device("cuda") if torch.cuda.is_available() else (
-            torch.device("mps") if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else torch.device("cpu")
+    if args.device != "auto":
+        device = torch.device(args.device)
+    else:
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else (
+                torch.device("mps") if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else torch.device("cpu")
+            )
         )
-    )
 
     train_csv = os.path.join(args.data_dir, "train.csv")
     valid_csv = os.path.join(args.data_dir, "valid.csv")

@@ -21,6 +21,7 @@ def parse_args():
     p.add_argument("--threshold", type=float, default=0.5)
     p.add_argument("--binary", action="store_true")
     p.add_argument("--precision", choices=["auto", "fp32", "bf16"], default="auto")
+    p.add_argument("--device", default="auto")
     return p.parse_args()
 
 
@@ -61,11 +62,14 @@ def predict_csv(model: SECAIModel, test_csv: str, out_csv: str, batch_size: int,
 
 def main():
     args = parse_args()
-    device = (
-        torch.device("cuda") if torch.cuda.is_available() else (
-            torch.device("mps") if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else torch.device("cpu")
+    if args.device != "auto":
+        device = torch.device(args.device)
+    else:
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else (
+                torch.device("mps") if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else torch.device("cpu")
+            )
         )
-    )
     model = SECAIModel(esm_model_name=args.esm_model, freeze_esm=True, device=device).to(device)
     model.eval()
     use_bf16 = False
