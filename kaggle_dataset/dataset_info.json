@@ -1,0 +1,15 @@
+{
+  "total_proteins": 1690,
+  "total_samples": 15248,
+  "train_size": 11436,
+  "valid_size": 2287,
+  "test_size": 1525,
+  "train_positive": 5679,
+  "train_negative": 5757,
+  "valid_positive": 1159,
+  "valid_negative": 1128,
+  "test_positive": 786,
+  "test_negative": 739,
+  "split_ratio": "75/15/10",
+  "negative_sampling": "1:1 random"
+}

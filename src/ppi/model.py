@@ -35,9 +35,10 @@ class SECAIModel(nn.Module):
         lora_alpha: int = 16,
         dropout: float = 0.1,
         device: Optional[torch.device] = None,
+        max_len: int = 1024,
     ):
         super().__init__()
-        self.encoder = ESMEncoder(model_name=esm_model_name, device=device)
+        self.encoder = ESMEncoder(model_name=esm_model_name, device=device, max_len=max_len)
         hidden_dim = self.encoder.hidden_dim or 1280
 
         if freeze_esm:

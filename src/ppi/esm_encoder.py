@@ -11,7 +11,7 @@ class ESMEncoder:
     Uses fair-esm API (`esm.pretrained`) and the alphabet batch converter.
     """
 
-    def __init__(self, model_name: str = "esm2_t33_650M_UR50D", device: Optional[torch.device] = None):
+    def __init__(self, model_name: str = "esm2_t33_650M_UR50D", device: Optional[torch.device] = None, max_len: int = 1024):
         self.model_name = model_name
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model, self.alphabet = getattr(esm.pretrained, model_name)()
@@ -25,6 +25,7 @@ class ESMEncoder:
         # Access via model.embed_dim for ESM2
         self.hidden_dim = getattr(self.model, "embed_dim", None)
         self.repr_layer = getattr(self.model, "num_layers", 33)
+        self.max_len = max_len
 
     @torch.no_grad()
     def encode_sequences(self, seqs: List[str], repr_layer: Optional[int] = None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -35,7 +36,9 @@ class ESMEncoder:
             features: [batch, seq_len, hidden_dim]
             attention_mask: [batch, seq_len] with 1 for real AA tokens
         """
-        data = [(f"seq{i}", s) for i, s in enumerate(seqs)]
+        # Truncate sequences to model maximum length
+        trunc = [s[: self.max_len] for s in seqs]
+        data = [(f"seq{i}", s) for i, s in enumerate(trunc)]
         labels, strs, tokens = self.batch_converter(data)
         tokens = tokens.to(self.device)
 
