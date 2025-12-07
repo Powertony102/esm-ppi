@@ -24,6 +24,7 @@ def parse_args():
     p.add_argument("--precision", choices=["auto", "fp32", "bf16"], default="auto")
     p.add_argument("--device", default="auto")
     p.add_argument("--output_dir", default="outputs")
+    p.add_argument("--checkpoint", default="")
     return p.parse_args()
 
 
@@ -147,7 +148,9 @@ def train():
                     for (pa, pb), y, p, pr in zip(all_ids, labels_list, probs, preds):
                         w.writerow([pa, pb, y, f"{p:.6f}", pr])
 
-    print("Training finished.")
+    ckpt_path = args.checkpoint or os.path.join(args.output_dir, "se_cai_last.pt")
+    torch.save({"state_dict": model.state_dict(), "esm_model_name": args.esm_model}, ckpt_path)
+    print(f"Training finished. checkpoint={ckpt_path}")
 
 
 if __name__ == "__main__":

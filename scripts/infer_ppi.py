@@ -22,6 +22,7 @@ def parse_args():
     p.add_argument("--binary", action="store_true")
     p.add_argument("--precision", choices=["auto", "fp32", "bf16"], default="auto")
     p.add_argument("--device", default="auto")
+    p.add_argument("--checkpoint", default="")
     return p.parse_args()
 
 
@@ -73,6 +74,10 @@ def main():
     if device.type == "cuda" and not torch.cuda.is_available():
         device = torch.device("cpu")
     model = SECAIModel(esm_model_name=args.esm_model, freeze_esm=True, device=device).to(device)
+    if args.checkpoint:
+        sd = torch.load(args.checkpoint, map_location=device)
+        sd = sd.get("state_dict", sd)
+        model.load_state_dict(sd, strict=False)
     model.eval()
     use_bf16 = False
     if args.precision == "bf16":
