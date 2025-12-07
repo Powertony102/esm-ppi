@@ -1,5 +1,6 @@
 import argparse
 import os
+import csv
 from typing import Tuple
 
 import torch
@@ -22,6 +23,7 @@ def parse_args():
     p.add_argument("--threshold", type=float, default=0.5)
     p.add_argument("--precision", choices=["auto", "fp32", "bf16"], default="auto")
     p.add_argument("--device", default="auto")
+    p.add_argument("--output_dir", default="outputs")
     return p.parse_args()
 
 
@@ -54,9 +56,12 @@ def train():
                 torch.device("mps") if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else torch.device("cpu")
             )
         )
+    if device.type == "cuda" and not torch.cuda.is_available():
+        device = torch.device("cpu")
 
     train_csv = os.path.join(args.data_dir, "train.csv")
     valid_csv = os.path.join(args.data_dir, "valid.csv")
+    os.makedirs(args.output_dir, exist_ok=True)
 
     train_ds = KagglePPIDataset(train_csv, has_label=True)
     valid_ds = KagglePPIDataset(valid_csv, has_label=True)
@@ -100,8 +105,9 @@ def train():
             n = 0
             all_logits = []
             all_labels = []
+            all_ids = []
             val_bar = tqdm(valid_dl, desc=f"valid epoch {epoch+1}", leave=False)
-            for seq_a, seq_b, labels, _ in val_bar:
+            for seq_a, seq_b, labels, ids in val_bar:
                 labels = labels.to(device)
                 if use_bf16:
                     with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
@@ -114,6 +120,7 @@ def train():
                 n += labels.size(0)
                 all_logits.append(logits.cpu())
                 all_labels.append(labels.cpu())
+                all_ids.extend(ids)
                 val_bar.set_postfix({"loss": f"{l.item():.4f}"})
             if n:
                 val_loss = total_loss / n
@@ -121,6 +128,24 @@ def train():
                 labels_cat = torch.cat(all_labels, dim=0)
                 acc, prec, rec, f1 = metrics_from_logits(logits_cat, labels_cat, args.threshold)
                 print(f"val_loss={val_loss:.4f} acc={acc:.4f} prec={prec:.4f} rec={rec:.4f} f1={f1:.4f}")
+
+                metrics_path = os.path.join(args.output_dir, "val_metrics.csv")
+                write_header = not os.path.exists(metrics_path)
+                with open(metrics_path, "a", newline="") as f:
+                    w = csv.writer(f)
+                    if write_header:
+                        w.writerow(["epoch", "val_loss", "acc", "prec", "rec", "f1", "threshold", "device", "precision"])
+                    w.writerow([epoch + 1, f"{val_loss:.6f}", f"{acc:.6f}", f"{prec:.6f}", f"{rec:.6f}", f"{f1:.6f}", args.threshold, str(device), "bf16" if use_bf16 else "fp32"]) 
+
+                probs = torch.sigmoid(logits_cat).squeeze(1).cpu().tolist()
+                preds = [1 if p > args.threshold else 0 for p in probs]
+                labels_list = labels_cat.squeeze(1).cpu().tolist()
+                preds_path = os.path.join(args.output_dir, f"val_predictions_epoch_{epoch+1}.csv")
+                with open(preds_path, "w", newline="") as f:
+                    w = csv.writer(f)
+                    w.writerow(["protein_A", "protein_B", "label", "prob", "pred"])
+                    for (pa, pb), y, p, pr in zip(all_ids, labels_list, probs, preds):
+                        w.writerow([pa, pb, y, f"{p:.6f}", pr])
 
     print("Training finished.")
 

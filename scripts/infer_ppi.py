@@ -70,6 +70,8 @@ def main():
                 torch.device("mps") if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else torch.device("cpu")
             )
         )
+    if device.type == "cuda" and not torch.cuda.is_available():
+        device = torch.device("cpu")
     model = SECAIModel(esm_model_name=args.esm_model, freeze_esm=True, device=device).to(device)
     model.eval()
     use_bf16 = False

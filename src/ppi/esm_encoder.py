@@ -19,7 +19,11 @@ class ESMEncoder:
             self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model, self.alphabet = getattr(esm.pretrained, model_name)()
         self.model.eval()
-        self.model.to(self.device)
+        try:
+            self.model.to(self.device)
+        except Exception:
+            self.device = torch.device("cpu")
+            self.model.to(self.device)
         self.batch_converter = self.alphabet.get_batch_converter()
         self.padding_idx = self.alphabet.padding_idx
         self.eos_idx = self.alphabet.eos_idx
