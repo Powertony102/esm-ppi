@@ -61,6 +61,27 @@ class ESMEncoder:
         return feats, mask
 
     @torch.no_grad()
+    def encode_sequences_with_contacts(self, seqs: List[str], repr_layer: Optional[int] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        trunc = [s[: self.max_len] for s in seqs]
+        data = [(f"seq{i}", s) for i, s in enumerate(trunc)]
+        labels, strs, tokens = self.batch_converter(data)
+        tokens = tokens.to(self.device)
+
+        layer = self.repr_layer if repr_layer is None else repr_layer
+        out = self.model(tokens, repr_layers=[layer], return_contacts=True)
+        feats = out["representations"][layer]
+        contacts = out.get("contacts")
+
+        mask = (tokens != self.padding_idx).to(torch.bool)
+        mask[:, 0] = False
+        mask = mask & (tokens != self.eos_idx)
+
+        if contacts is None:
+            sim = torch.matmul(feats, feats.transpose(1, 2))
+            contacts = sim
+        return feats, mask, contacts
+
+    @torch.no_grad()
     def encode_pair_batch(
         self,
         seqs_a: List[str],
@@ -73,3 +94,14 @@ class ESMEncoder:
         feats_a, mask_a = self.encode_sequences(seqs_a, repr_layer)
         feats_b, mask_b = self.encode_sequences(seqs_b, repr_layer)
         return feats_a, mask_a, feats_b, mask_b
+
+    @torch.no_grad()
+    def encode_pair_with_contacts(
+        self,
+        seqs_a: List[str],
+        seqs_b: List[str],
+        repr_layer: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        fa, ma, ca = self.encode_sequences_with_contacts(seqs_a, repr_layer)
+        fb, mb, cb = self.encode_sequences_with_contacts(seqs_b, repr_layer)
+        return fa, ma, ca, fb, mb, cb

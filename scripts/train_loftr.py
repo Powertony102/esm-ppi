@@ -26,6 +26,7 @@ def parse_args():
     p.add_argument("--temperature", type=float, default=4.0)
     p.add_argument("--output_dir", default="outputs")
     p.add_argument("--loss_type", choices=["mse", "kl"], default="mse")
+    p.add_argument("--teacher_map_source", choices=["similarity", "contacts_outer"], default="similarity")
     return p.parse_args()
 
 
@@ -54,6 +55,14 @@ def pad_teacher_map(maps, masks_a, masks_b, la, lb):
         out[i, :la_i, :lb_i] = maps[i, :la_i, :lb_i]
         mask_out[i, :la_i, :lb_i] = 1.0
     return out, mask_out
+
+
+def contacts_outer_map(contacts_a: torch.Tensor, contacts_b: torch.Tensor) -> torch.Tensor:
+    pa = contacts_a.sum(dim=-1)
+    pb = contacts_b.sum(dim=-1)
+    pa = pa / torch.clamp(pa.sum(dim=-1, keepdim=True), min=1e-6)
+    pb = pb / torch.clamp(pb.sum(dim=-1, keepdim=True), min=1e-6)
+    return pa.unsqueeze(-1) * pb.unsqueeze(-2)
 
 
 def main():
@@ -90,9 +99,13 @@ def main():
             a_idx = a_idx.to(device)
             b_idx = b_idx.to(device)
             with torch.no_grad():
-                fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
-                fa, fb = normalize_feats(fa, fb)
-                t_map = torch.matmul(fa, fb.transpose(1, 2))
+                if args.teacher_map_source == "similarity":
+                    fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
+                    fa, fb = normalize_feats(fa, fb)
+                    t_map = torch.matmul(fa, fb.transpose(1, 2))
+                else:
+                    fa, ma, ca, fb, mb, cb = teacher.encode_pair_with_contacts(seq_a, seq_b)
+                    t_map = contacts_outer_map(ca, cb)
                 la = a_idx.size(1)
                 lb = b_idx.size(1)
                 t_map_pad, mask_pad = pad_teacher_map(t_map, ma, mb, la, lb)
@@ -123,9 +136,13 @@ def main():
                 a_idx, b_idx = pad_batch(seq_a, seq_b, args.max_len)
                 a_idx = a_idx.to(device)
                 b_idx = b_idx.to(device)
-                fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
-                fa, fb = normalize_feats(fa, fb)
-                t_map = torch.matmul(fa, fb.transpose(1, 2))
+                if args.teacher_map_source == "similarity":
+                    fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
+                    fa, fb = normalize_feats(fa, fb)
+                    t_map = torch.matmul(fa, fb.transpose(1, 2))
+                else:
+                    fa, ma, ca, fb, mb, cb = teacher.encode_pair_with_contacts(seq_a, seq_b)
+                    t_map = contacts_outer_map(ca, cb)
                 la = a_idx.size(1)
                 lb = b_idx.size(1)
                 t_map_pad, mask_pad = pad_teacher_map(t_map, ma, mb, la, lb)
