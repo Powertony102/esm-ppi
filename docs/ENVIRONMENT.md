@@ -17,5 +17,12 @@
 学生模型推理：
 - 单对：`PYTHONPATH=. python scripts/infer_student.py --seq_a <SEQ_A> --seq_b <SEQ_B> --checkpoint outputs/student_last.pt --precision auto --device cuda:0`
 - 批量：`PYTHONPATH=. python scripts/infer_student.py --test_csv kaggle_dataset/test.csv --out_csv student_submission.csv --checkpoint outputs/student_last.pt --precision auto --device cuda:0`
+
+双流学生蒸馏训练（PPI-D²Feat）：
+- `PYTHONPATH=. python scripts/train_d2feat.py --data_dir kaggle_dataset --teacher_esm_model esm2_t33_650M_UR50D --teacher_checkpoint outputs/se_cai_last.pt --epochs 1 --batch_size 8 --precision auto --device cuda:0 --output_dir outputs`
+
+双流学生推理：
+- 单对：`PYTHONPATH=. python scripts/infer_d2feat_student.py --seq_a <SEQ_A> --seq_b <SEQ_B> --checkpoint outputs/d2feat_student_last.pt --precision auto --device cuda:0 --esm_dim 1280`
+- 批量：`PYTHONPATH=. python scripts/infer_d2feat_student.py --test_csv kaggle_dataset/test.csv --out_csv d2feat_submission.csv --checkpoint outputs/d2feat_student_last.pt --precision auto --device cuda:0 --esm_dim 1280`
 输出：
 - 训练会在 `outputs/val_metrics.csv` 写入每个 epoch 的验证指标；在 `outputs/val_predictions_epoch_<N>.csv` 写入验证集每个样本的概率与预测。默认保存模型权重到 `outputs/se_cai_last.pt`。
