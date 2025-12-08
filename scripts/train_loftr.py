@@ -50,16 +50,22 @@ def pad_teacher_map(maps, masks_a, masks_b, la, lb):
     out = torch.zeros((bsz, la, lb), device=maps.device, dtype=maps.dtype)
     mask_out = torch.zeros((bsz, la, lb), device=maps.device, dtype=maps.dtype)
     for i in range(bsz):
-        la_i = int(masks_a[i].sum().item())
-        lb_i = int(masks_b[i].sum().item())
+        la_i = min(int(masks_a[i].sum().item()), la)
+        lb_i = min(int(masks_b[i].sum().item()), lb)
+        la_i = min(la_i, maps.size(1))
+        lb_i = min(lb_i, maps.size(2))
         out[i, :la_i, :lb_i] = maps[i, :la_i, :lb_i]
         mask_out[i, :la_i, :lb_i] = 1.0
     return out, mask_out
 
 
-def contacts_outer_map(contacts_a: torch.Tensor, contacts_b: torch.Tensor) -> torch.Tensor:
-    pa = contacts_a.sum(dim=-1)
-    pb = contacts_b.sum(dim=-1)
+def contacts_outer_map(contacts_a: torch.Tensor, contacts_b: torch.Tensor, mask_a: torch.Tensor, mask_b: torch.Tensor) -> torch.Tensor:
+    ma2d = (mask_a.unsqueeze(2) & mask_a.unsqueeze(1)).type_as(contacts_a)
+    mb2d = (mask_b.unsqueeze(2) & mask_b.unsqueeze(1)).type_as(contacts_b)
+    ca = contacts_a * ma2d
+    cb = contacts_b * mb2d
+    pa = ca.sum(dim=-1)
+    pb = cb.sum(dim=-1)
     pa = pa / torch.clamp(pa.sum(dim=-1, keepdim=True), min=1e-6)
     pb = pb / torch.clamp(pb.sum(dim=-1, keepdim=True), min=1e-6)
     return pa.unsqueeze(-1) * pb.unsqueeze(-2)
@@ -78,7 +84,7 @@ def main():
     valid_dl = DataLoader(valid_ds, batch_size=args.batch_size, shuffle=False, collate_fn=kaggle_collate)
 
     student = StudentPPIWithLoFTR().to(device)
-    teacher = ESMEncoder(model_name=args.teacher_esm_model, device=device)
+    teacher = ESMEncoder(model_name=args.teacher_esm_model, device=device, max_len=args.max_len)
     optim = torch.optim.AdamW(student.parameters(), lr=args.lr)
     criterion = LoFTRDistillationLoss(alpha_map=args.alpha_map, temperature=args.temperature, loss_type=args.loss_type)
 
@@ -101,11 +107,13 @@ def main():
             with torch.no_grad():
                 if args.teacher_map_source == "similarity":
                     fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
+                    fa = fa * ma.unsqueeze(-1).type_as(fa)
+                    fb = fb * mb.unsqueeze(-1).type_as(fb)
                     fa, fb = normalize_feats(fa, fb)
                     t_map = torch.matmul(fa, fb.transpose(1, 2))
                 else:
                     fa, ma, ca, fb, mb, cb = teacher.encode_pair_with_contacts(seq_a, seq_b)
-                    t_map = contacts_outer_map(ca, cb)
+                    t_map = contacts_outer_map(ca, cb, ma, mb)
                 la = a_idx.size(1)
                 lb = b_idx.size(1)
                 t_map_pad, mask_pad = pad_teacher_map(t_map, ma, mb, la, lb)
@@ -138,11 +146,13 @@ def main():
                 b_idx = b_idx.to(device)
                 if args.teacher_map_source == "similarity":
                     fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
+                    fa = fa * ma.unsqueeze(-1).type_as(fa)
+                    fb = fb * mb.unsqueeze(-1).type_as(fb)
                     fa, fb = normalize_feats(fa, fb)
                     t_map = torch.matmul(fa, fb.transpose(1, 2))
                 else:
                     fa, ma, ca, fb, mb, cb = teacher.encode_pair_with_contacts(seq_a, seq_b)
-                    t_map = contacts_outer_map(ca, cb)
+                    t_map = contacts_outer_map(ca, cb, ma, mb)
                 la = a_idx.size(1)
                 lb = b_idx.size(1)
                 t_map_pad, mask_pad = pad_teacher_map(t_map, ma, mb, la, lb)
