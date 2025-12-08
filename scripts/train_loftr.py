@@ -39,6 +39,11 @@ def select_device(dev):
     return d
 
 
+def normalize_feats(fa: torch.Tensor, fb: torch.Tensor):
+    fa_n = F.normalize(fa, dim=-1)
+    fb_n = F.normalize(fb, dim=-1)
+    return fa_n, fb_n
+
 def pad_teacher_map(maps, masks_a, masks_b, la, lb):
     bsz = maps.shape[0]
     out = torch.zeros((bsz, la, lb), device=maps.device, dtype=maps.dtype)
@@ -86,8 +91,7 @@ def main():
             b_idx = b_idx.to(device)
             with torch.no_grad():
                 fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
-                fa = F.normalize(fa, dim=-1)
-                fb = F.normalize(fb, dim=-1)
+                fa, fb = normalize_feats(fa, fb)
                 t_map = torch.matmul(fa, fb.transpose(1, 2))
                 la = a_idx.size(1)
                 lb = b_idx.size(1)
@@ -120,8 +124,7 @@ def main():
                 a_idx = a_idx.to(device)
                 b_idx = b_idx.to(device)
                 fa, ma, fb, mb = teacher.encode_pair_batch(seq_a, seq_b)
-                fa = F.normalize(fa, dim=-1)
-                fb = F.normalize(fb, dim=-1)
+                fa, fb = normalize_feats(fa, fb)
                 t_map = torch.matmul(fa, fb.transpose(1, 2))
                 la = a_idx.size(1)
                 lb = b_idx.size(1)
